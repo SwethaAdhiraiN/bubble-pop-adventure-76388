@@ -113,7 +113,20 @@ function App() {
           {inGame && (
             <>
               <GameCanvas
-                // In the future: pass down level, score/lives onScore/onLifeLost handlers as needed
+                // Pass hooks for score, lives, and level events
+                level={level}
+                onScore={(pts) => setScore((s) => s + pts)}
+                onLifeLost={() => {
+                  setLives((life) => {
+                    if(life <= 1) {
+                      setTimeout(() => setIsGameOver(true), 350); // Show slight animation delay
+                      setInGame(false);
+                      return 0;
+                    }
+                    return life - 1;
+                  });
+                }}
+                onAllBubblesCleared={handleLevelComplete}
               />
               <Controls
                 onLeft={() => {

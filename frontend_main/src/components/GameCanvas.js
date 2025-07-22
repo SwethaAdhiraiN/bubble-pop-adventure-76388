@@ -8,7 +8,6 @@ import Bubbles from './Bubbles';
  */
 const CANVAS_WIDTH = 750; // px (match CSS)
 const CANVAS_HEIGHT = 440;
-
 const GROUND_Y = CANVAS_HEIGHT - 40; // Match .game-bg-arcade height
 
 const CHARACTER_WIDTH = 42;
@@ -16,7 +15,6 @@ const CHARACTER_HEIGHT = 54;
 const CHARACTER_SPEED = 6;
 
 const HARPOON_WIDTH = 6;
-const HARPOON_HEIGHT = CANVAS_HEIGHT;
 const HARPOON_SPEED = 15;
 const HARPOON_COOLDOWN = 300;
 
@@ -54,7 +52,7 @@ function getInitialBubbles(level = 1) {
       alive: true,
     },
   ];
-  // Optionally randomize or add difficulty as more levels introduced
+  // Optionally randomize or add difficulty as levels increase
   return basic;
 }
 
@@ -67,28 +65,42 @@ function clamp(value, min, max) {
 
 // PUBLIC_INTERFACE
 function GameCanvas({
-  // Future: onScore, onLifeLost, level, etc.
+  onScore,
+  onLifeLost,
+  onAllBubblesCleared,
+  level = 1,
 }) {
   /**
    * Renders and runs main game logic, including:
    * - Character movement (left/right), boundary check
    * - Harpoon shooting, cooldown, and state
    * - Bubbles: gravity, bounce, and wall reflection
-   * - Collision detection scaffolding (with TODOs)
-   * 
-   * Uses div-based rendering for universal layout matching. 
+   * - Collision detection for harpoon/bubble, player/bubble
+   * - Bubble popping/splitting and scoring
+   * - Hooks for parent score/life/level
    */
   const [characterX, setCharacterX] = useState(CANVAS_WIDTH / 2 - CHARACTER_WIDTH / 2);
-  const [characterDir, setCharacterDir] = useState(0); // -1: left, 1: right, 0: idle
+  const [characterDir, setCharacterDir] = useState(0);
   const [harpoon, setHarpoon] = useState(null); // {x, y, active}
   const [harpoonCooldown, setHarpoonCooldown] = useState(false);
-  const [bubbles, setBubbles] = useState(getInitialBubbles(1)); // Array of bubble objects
+  const [bubbles, setBubbles] = useState(getInitialBubbles(level));
+  const [scorePending, setScorePending] = useState(null); // {pts, x, y, size}
+  const [popFx, setPopFx] = useState(null); // {x, y, triggerTime}
+  const [audioPopKey, setAudioPopKey] = useState(0);
 
-  // For efficient game loop
+  // Reset bubbles and character state on new level
+  useEffect(() => {
+    setBubbles(getInitialBubbles(level));
+    setHarpoon(null);
+    setScorePending(null);
+    setCharacterX(CANVAS_WIDTH / 2 - CHARACTER_WIDTH / 2);
+  }, [level]);
+
+  // For efficient game loop (stores mutable, non-reactive refs)
   const requestRef = useRef();
   const keyState = useRef({});
 
-  // Handlers for keyboard/movement/shoot
+  // Keyboard handlers
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['ArrowLeft', 'a', 'A'].includes(e.key)) {
@@ -120,14 +132,12 @@ function GameCanvas({
     };
   }, []);
 
-  // Movement + shoot triggers
+  // Main loop: movement, collisions, pops, scoring, etc.
   useEffect(() => {
     let shootLock = false;
     let lastTimestamp = performance.now();
 
     function gameLoop(now) {
-      // dt in ms
-      const dt = now - lastTimestamp;
       lastTimestamp = now;
 
       // --- Character Movement Logic ---
@@ -140,9 +150,8 @@ function GameCanvas({
         return newX;
       });
 
-      // --- Harpoon Shooting ---
+      // --- Harpoon Shooting Logic ---
       if (keyState.current.shoot && !harpoonCooldown && !harpoon && !shootLock) {
-        // Launch harpoon from character center top
         setHarpoon({
           x: characterX + CHARACTER_WIDTH / 2 - HARPOON_WIDTH / 2,
           y: GROUND_Y - CHARACTER_HEIGHT,
@@ -152,33 +161,31 @@ function GameCanvas({
         shootLock = true;
         setTimeout(() => setHarpoonCooldown(false), HARPOON_COOLDOWN);
       } else if (!keyState.current.shoot) {
-        shootLock = false; // reset lock when button released
+        shootLock = false;
       }
 
-      // --- Harpoon ascending logic ---
+      // --- Harpoon Ascend ---
       setHarpoon((prev) => {
         if (!prev || !prev.active) return null;
         let newY = prev.y - HARPOON_SPEED;
-        if (newY < 0) return null; // Remove harpoon if off screen
+        if (newY < 0) return null;
         return { ...prev, y: newY, active: true };
       });
 
-      // --- Bubbles physics update ---
+      // --- Bubbles Physics Update ---
       setBubbles((prevBubbles) =>
         prevBubbles.map((b) => {
           if (!b.alive) return b;
-          let newVy = b.vy + BUBBLE_GRAVITY; // gravity
+          let newVy = b.vy + BUBBLE_GRAVITY;
           let newY = b.y + newVy;
           let newX = b.x + b.vx;
           let newVx = b.vx;
 
-          // Bounce off ground
           if (newY + BUBBLE_SIZES[b.size].radius > GROUND_Y) {
             newY = GROUND_Y - BUBBLE_SIZES[b.size].radius;
             newVy = BUBBLE_BOUNCE_VY;
           }
 
-          // Bounce off side walls
           if (
             newX - BUBBLE_SIZES[b.size].radius < 0 ||
             newX + BUBBLE_SIZES[b.size].radius > CANVAS_WIDTH
@@ -194,47 +201,74 @@ function GameCanvas({
         })
       );
 
-      // --- Collision Detection (Scaffolding) ---
-      // TODO: Add scoring, life lost, bubble splitting & game state hooks
-
-      // 1. Active harpoon vs any bubble
+      // --- Collision Detection: Harpoon <-> Bubble ---
       if (harpoon && harpoon.active) {
+        let harpoonUsed = false;
         bubbles.forEach((b, idx) => {
           if (!b.alive) return;
           const bx = b.x;
           const by = b.y;
           const br = BUBBLE_SIZES[b.size].radius;
-
-          // Harpoon is a line along the harpoon x, from harpoon.y up to top
           const hx = harpoon.x + HARPOON_WIDTH / 2;
           const hy = harpoon.y;
-          const isInRange =
-            hx > bx - br &&
-            hx < bx + br &&
-            hy < by + br &&
-            GROUND_Y - CHARACTER_HEIGHT > by - br;
-
-          if (isInRange) {
-            // --- Handle collision ---
-            // TODO:  - Pop or split bubble (add new bubbles if not smallest)
-            //        - Increase score
-            //        - Remove (reset) harpoon
-            //        - Play pop animation/sound in future
-            //        - Call scoring/game state hooks if provided
-
-            // Scaffolding: Mark bubble as dead, remove harpoon
+          // Bubble's circle intersects with vertical harpoon line (hx)
+          const atXSweep = hx > bx - br && hx < bx + br;
+          const bubbleTop = by - br, bubbleBot = by + br;
+          const crossesBubble = hy < bubbleBot && (GROUND_Y - CHARACTER_HEIGHT) > bubbleTop;
+          if (atXSweep && crossesBubble && !harpoonUsed) {
+            // Handle pop/split
             setBubbles((prev) => {
               const next = [...prev];
-              next[idx] = { ...next[idx], alive: false }; // Mark as dead
-              // In future: replace with split or remove for smallest
+              const hit = next[idx];
+              if (!hit.alive) return next;
+              // Not smallest: split, else remove
+              if (hit.size < BUBBLE_SIZES.length - 1) {
+                const newsz = hit.size + 1;
+                const speed = 3.2 + Math.random() * 1.9;
+                const left = {
+                  ...hit,
+                  id: Date.now() + Math.random(),
+                  x: hit.x - BUBBLE_SIZES[newsz].radius * 0.7,
+                  y: hit.y,
+                  size: newsz,
+                  vx: -Math.abs(speed),
+                  vy: BUBBLE_BOUNCE_VY * (0.95 + Math.random() * 0.14),
+                  alive: true,
+                };
+                const right = {
+                  ...hit,
+                  id: Date.now() + Math.random(),
+                  x: hit.x + BUBBLE_SIZES[newsz].radius * 0.7,
+                  y: hit.y,
+                  size: newsz,
+                  vx: +Math.abs(speed),
+                  vy: BUBBLE_BOUNCE_VY * (0.95 + Math.random() * 0.14),
+                  alive: true,
+                };
+                next[idx] = { ...hit, alive: false };
+                next.push(left, right);
+              } else {
+                next[idx] = { ...hit, alive: false };
+              }
               return next;
             });
+            // Award score
+            const score = BUBBLE_SIZES[b.size].score;
+            setScorePending({ pts: score, x: bx, y: by, size: b.size });
+            if (typeof onScore === "function") {
+              onScore(score, { bubbleSize: b.size, position: { x: bx, y: by } });
+            }
+            // Visual + audio feedback
+            setPopFx({ x: bx, y: by, triggerTime: now });
+            setAudioPopKey(k => k + 1);
             setHarpoon(null);
+            harpoonUsed = true;
           }
         });
       }
 
-      // 2. Player collision with bubble
+      // --- Player <-> Bubble collision
+      let playerLose = false;
       bubbles.forEach((b) => {
         if (!b.alive) return;
         const bx = b.x,
@@ -243,13 +277,22 @@ function GameCanvas({
         const cx = characterX + CHARACTER_WIDTH / 2,
           cy = GROUND_Y - CHARACTER_HEIGHT / 2;
         const dist = Math.hypot(bx - cx, by - cy);
-        if (dist < br + Math.max(CHARACTER_WIDTH, CHARACTER_HEIGHT) / 2.2) {
-          // TODO: Lose a life, death animation/game over logic
-          // (Currently just logs, no UI hook yet)
-          // Optionally: set player hit state here
-          // console.log('Player hit by bubble!');
+        if (dist < br + Math.max(CHARACTER_WIDTH, CHARACTER_HEIGHT) / 2.1 && !playerLose) {
+          playerLose = true;
         }
       });
+
+      if (playerLose) {
+        if (typeof onLifeLost === "function") onLifeLost();
+        // Animation hook can be added here
+      }
+
+      // --- Level Clear: trigger win if no bubbles alive
+      if (bubbles.every(b => !b.alive)) {
+        if (typeof onAllBubblesCleared === "function") {
+          onAllBubblesCleared();
+        }
+      }
 
       requestRef.current = requestAnimationFrame(gameLoop);
     }
@@ -257,30 +300,26 @@ function GameCanvas({
     requestRef.current = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(requestRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [characterX, harpoon, harpoonCooldown, bubbles]);
+  }, [characterX, harpoon, harpoonCooldown, bubbles, onScore, onLifeLost, onAllBubblesCleared, level]);
 
-  // Event handlers for mobile/UI controls so Controls.js can trigger logic
-  const handleLeft = useCallback(
-    () => setCharacterX((prev) => clamp(prev - CHARACTER_SPEED, 0, CANVAS_WIDTH - CHARACTER_WIDTH)),
-    []
-  );
-  const handleRight = useCallback(
-    () => setCharacterX((prev) => clamp(prev + CHARACTER_SPEED, 0, CANVAS_WIDTH - CHARACTER_WIDTH)),
-    []
-  );
-  const handleShoot = useCallback(() => {
-    if (!harpoon && !harpoonCooldown) {
-      setHarpoon({
-        x: characterX + CHARACTER_WIDTH / 2 - HARPOON_WIDTH / 2,
-        y: GROUND_Y - CHARACTER_HEIGHT,
-        active: true,
-      });
-      setHarpoonCooldown(true);
-      setTimeout(() => setHarpoonCooldown(false), HARPOON_COOLDOWN);
+  // Score visual pop/fade
+  useEffect(() => {
+    let timer;
+    if (scorePending) {
+      timer = setTimeout(() => setScorePending(null), 650);
     }
-  }, [characterX, harpoon, harpoonCooldown]);
+    return () => clearTimeout(timer);
+  }, [scorePending]);
 
-  // Render all entities using absolutely positioned divs for UI
+  // Scaffold: pop sound trigger for effect
+  useEffect(() => {
+    if (popFx) {
+      const t = setTimeout(() => setPopFx(null), 200);
+      return () => clearTimeout(t);
+    }
+  }, [popFx]);
+
+  // Render game canvas, bubbles, character, harpoon, floating feedback, etc.
   return (
     <div
       className="game-canvas"
@@ -296,7 +335,7 @@ function GameCanvas({
       {/* Game Background */}
       <div className="game-bg-arcade" />
 
-      {/* Render All Bubbles */}
+      {/* Render Bubbles */}
       {bubbles.map(
         (b, i) =>
           b.alive && (
@@ -312,17 +351,52 @@ function GameCanvas({
                 background: BUBBLE_COLORS[b.size % BUBBLE_COLORS.length],
                 border: '3px solid #fff',
                 zIndex: 2,
-                boxShadow: '0 2px 12px #2d72d988',
+                boxShadow: '0 2px 9px #2d72d980',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 pointerEvents: 'none',
-                transition: 'background 0.2s',
+                filter: popFx && popFx.x === b.x && popFx.y === b.y ? 'brightness(1.8) drop-shadow(0 0 14px #fff)' : undefined,
                 opacity: 1,
+                transition: 'background 0.2s, filter 0.24s',
               }}
-            />
+            >
+              {/* Bubble visual core */}
+              <span
+                style={{
+                  width: '80%',
+                  height: '80%',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle at 33% 26%, #fff8, #fff2 60%, transparent)',
+                  display: 'block',
+                }}
+              />
+            </div>
           )
       )}
+
+      {/* Bubble Pop FX: animated circle & audio hook */}
+      {popFx && (
+        <div
+          key={'popfx-' + popFx.triggerTime}
+          style={{
+            position: 'absolute',
+            left: popFx.x - 14,
+            top: popFx.y - 14,
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            zIndex: 9,
+            border: '2.5px dashed #fcc419',
+            background: 'rgba(252,196,25,0.2)',
+            pointerEvents: 'none',
+            opacity: 1,
+            animation: 'bubble-pop-fx .27s cubic-bezier(0.35,1.78,0.45,0.95) forwards',
+          }}
+        />
+      )}
+      {/* Scaffold: For pop sound fx, this may trigger a useEffect in future with a SFX library */}
+      {/* {audioPopKey && <audio autoPlay src='bubble-pop.wav' />} */}
 
       {/* Render Character */}
       <div
@@ -353,15 +427,40 @@ function GameCanvas({
             borderRadius: '4px',
             boxShadow: '0 0 7px #fcc419af',
             zIndex: 2,
+            transition: 'opacity 0.1s',
           }}
         />
       )}
 
-      {/* Optional: Bubble emojis for reference
-         <Bubbles /> 
-      */}
+      {/* Score pop-up effect */}
+      {scorePending && (
+        <div
+          style={{
+            position: 'absolute',
+            left: scorePending.x - 8,
+            top: scorePending.y - 22,
+            padding: '1px 9px',
+            background: 'rgba(50,200,255,0.89)',
+            color: '#fff',
+            borderRadius: 8,
+            fontWeight: 700,
+            fontSize: 18 + scorePending.size * 2,
+            zIndex: 99,
+            pointerEvents: 'none',
+            border: '1.5px solid #fcc419',
+            opacity: 0.92,
+            boxShadow: '0 0 11px #2d72d955',
+            animation: 'score-popup-fade 0.6s linear',
+          }}
+        >
+          +{scorePending.pts}
+        </div>
+      )}
 
-      {/* Display no placeholder message: implemented */}
+      {/* Bubble emojis for debugging/reference */}
+      {/* <Bubbles /> */}
+
+      {/* Note: Add keyframes for 'bubble-pop-fx' and 'score-popup-fade' in App.css for visual effect */}
     </div>
   );
 }
