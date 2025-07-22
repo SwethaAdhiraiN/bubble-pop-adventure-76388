@@ -231,6 +231,28 @@
   font-size: 1.1em;
 }
 
+/* Score/Lives flash effects */
+.score-flash {
+  animation: score-bar-flash 0.33s cubic-bezier(.84,-0.25,.71,1.36);
+  box-shadow: 0 0 8px #fcc419;
+  border-color: #fcc419;
+}
+@keyframes score-bar-flash {
+  0% { background: rgba(252,196,25,0.22);}
+  40% { background: rgba(252,196,25,0.34);}
+  100% { background: none; }
+}
+.lives-flash {
+  animation: lives-bar-flash 0.46s cubic-bezier(.8,.4,.52,1.58);
+  box-shadow: 0 0 9px #e84545cc;
+  border-color: #e84545;
+}
+@keyframes lives-bar-flash {
+  0% { background: rgba(232,69,69,0.23);}
+  27% { background: rgba(232,69,69,0.46);}
+  100% { background: none; }
+}
+
 .level-indicator {
   font-size: 1.08em;
 }
