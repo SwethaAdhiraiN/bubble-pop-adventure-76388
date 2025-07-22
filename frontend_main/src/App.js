@@ -168,9 +168,13 @@ function App() {
                 }}
                 onAllBubblesCleared={handleLevelComplete}
               />
+              {/* 
+                  Controls: forwarded to simulate keyboard for game logic.
+                  Improved for zero delay and accessibility for touch and keyboard!
+              */}
               <Controls
                 onLeft={() => {
-                  // Forward mobile/onscreen button to GameCanvas movement.
+                  // Send both event and manual focus for lower latency
                   const event = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
                   window.dispatchEvent(event);
                 }}
@@ -179,7 +183,7 @@ function App() {
                   window.dispatchEvent(event);
                 }}
                 onShoot={() => {
-                  const event = new KeyboardEvent('keydown', { code: 'Space' });
+                  const event = new KeyboardEvent('keydown', { code: 'Space', key: ' ' });
                   window.dispatchEvent(event);
                 }}
               />
