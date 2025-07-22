@@ -1,1 +1,3 @@
-# bubble-pop-adventure-76388
+# Project Repository
+
+This is the initial README file for the project.
