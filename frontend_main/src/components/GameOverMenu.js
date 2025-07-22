@@ -6,7 +6,9 @@ function GameOverMenu({ gameOver, onRetry, onMainMenu, isWin }) {
    * Displays on win or loss, with options to retry or return.
    */
   return (
-    <div className="gameover-menu">
+    <div className="gameover-menu" tabIndex={-1} style={{
+      animation: 'menu-fade-in 0.36s cubic-bezier(.38,-0.02,.68,1.1)'
+    }}>
       <h2>
         {isWin ? '🎉 Level Cleared!' : '💀 Game Over'}
       </h2>

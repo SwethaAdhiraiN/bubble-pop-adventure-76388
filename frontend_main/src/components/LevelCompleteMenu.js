@@ -7,7 +7,9 @@ function LevelCompleteMenu({ level, onNext, onMainMenu }) {
    * offering to proceed to the next level or return to main menu.
    */
   return (
-    <div className="gameover-menu">
+    <div className="gameover-menu" tabIndex={-1} style={{
+      animation: 'menu-fade-in 0.36s cubic-bezier(.38,-0.02,.68,1.1)'
+    }}>
       <h2>
         🎉 Level {level} Complete!
       </h2>

@@ -108,6 +108,85 @@
   100% { opacity:0;   transform:translateY(-37px) scale(0.95);}
 }
 
+/* --- Effect: Harpoon fire animation --- */
+@keyframes harpoon-fire-fx {
+  0%   { opacity: 0.8; transform: scaleY(0.3); filter: blur(1px);}
+  60%  { opacity: 1;   transform: scaleY(1.08);}
+  100% { opacity: 0.33; transform: scaleY(1.5);}
+}
+
+/* --- Effect: Character hit/faint animation --- */
+@keyframes character-hit-fx {
+  0%   { opacity: 1; filter: none;}
+  16%  { opacity: 1; filter: drop-shadow(0 0 10px #e84545) brightness(1.9);}
+  58%  { opacity: 0.74;}
+  84%  { transform: translateY(0);}
+  100% { opacity: 0.0; filter: none; transform: translateY(60px);}
+}
+
+/* Menu/modal entrance/exit transitions */
+@keyframes menu-fade-in {
+  0%   { opacity: 0; transform: scale(0.92) translateY(35px);}
+  87%  { opacity: 1;}
+  100% { opacity: 1; transform: scale(1) translateY(0);}
+}
+@keyframes menu-fade-out {
+  to   { opacity: 0; transform: scale(0.93) translateY(50px);}
+}
+@keyframes overlay-bg-in {
+  from { opacity: 0;}
+  to   { opacity: 1;}
+}
+@keyframes overlay-bg-out {
+  to   { opacity: 0;}
+}
+
+/* --- Animated overlays and modal improvements --- */
+.main-menu,
+.gameover-menu,
+.arcade-modal {
+  animation: menu-fade-in 0.36s cubic-bezier(.38,-0.02,.68,1.1);
+  transition: opacity 0.24s cubic-bezier(.64,0,.39,1), transform 0.26s cubic-bezier(.61,.01,.54,1);
+  will-change: opacity, transform;
+}
+.instructions-modal {
+  animation: overlay-bg-in 0.28s cubic-bezier(.67,.05,.97,1);
+  will-change: opacity;
+}
+
+/* --- Bubble pop: add a popper class for animated pop effect --- */
+.bubble-popper-fx {
+  animation: bubble-pop-fx .29s cubic-bezier(0.35,1.78,0.45,0.95) forwards;
+  z-index: 11 !important;
+  border: 3.5px dashed #fcc419 !important;
+  background: radial-gradient(circle at 64% 51%, #fff8 55%, #fcc41911 100%) !important;
+  box-shadow: 0 0 18px #fcc41970;
+  pointer-events: none;
+}
+
+/* --- Harpoon pop visual for hit --- */
+.harpoon-fx {
+  animation: harpoon-fire-fx .18s cubic-bezier(.67,-0.45,.4,1.18);
+}
+
+/* --- Character hit/lose animation class --- */
+.character-hit-fx {
+  animation: character-hit-fx .59s cubic-bezier(.78,-0.06,.3,1.24) forwards;
+}
+
+/* --- Responsive layout tweaks for modals/menus for mobile --- */
+@media (max-width: 480px) {
+  .main-menu,
+  .gameover-menu,
+  .arcade-modal {
+    border-radius: 14px;
+    padding: 12vw 3vw 6vw 3vw;
+    min-width: unset;
+    max-width: 97vw;
+    font-size: .98em;
+  }
+}
+
 /* Responsive design for mobile */
 @media (max-width: 768px) {
   .theme-toggle {

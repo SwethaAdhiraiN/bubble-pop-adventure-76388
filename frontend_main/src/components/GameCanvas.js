@@ -94,6 +94,7 @@ function GameCanvas({
   const [scorePending, setScorePending] = useState(null); // {pts, x, y, size}
   const [popFx, setPopFx] = useState(null); // {x, y, triggerTime}
   const [audioPopKey, setAudioPopKey] = useState(0);
+  const [charHit, setCharHit] = useState(false); // For character "death" animation
 
   // Reset bubbles and character state on new level
   useEffect(() => {
@@ -101,6 +102,7 @@ function GameCanvas({
     setHarpoon(null);
     setScorePending(null);
     setCharacterX(CANVAS_WIDTH / 2 - CHARACTER_WIDTH / 2);
+    setCharHit(false);
   }, [level]);
 
   // For efficient game loop (stores mutable, non-reactive refs)
@@ -290,8 +292,9 @@ function GameCanvas({
       });
 
       if (playerLose) {
+        setCharHit(true); // visual effect for character hit
+        setTimeout(() => setCharHit(false), 590);
         if (typeof onLifeLost === "function") onLifeLost();
-        // Animation hook can be added here
       }
 
       // --- Level Clear: trigger win if no bubbles alive
@@ -348,6 +351,7 @@ function GameCanvas({
           b.alive && (
             <div
               key={b.id}
+              className={popFx && popFx.x === b.x && popFx.y === b.y ? "bubble-popper-fx" : ""}
               style={{
                 position: 'absolute',
                 left: `${b.x - BUBBLE_SIZES[b.size].radius}px`,
@@ -417,12 +421,15 @@ function GameCanvas({
           pointerEvents: 'none',
         }}
       >
-        <Character />
+        <span className={charHit ? "character-hit-fx" : ""} style={{ display: "block", width: "100%", height: "100%" }}>
+          <Character />
+        </span>
       </div>
 
       {/* Render Harpoon (if active) */}
       {harpoon && harpoon.active && (
         <div
+          className="harpoon-fx"
           style={{
             position: 'absolute',
             left: harpoon.x,
