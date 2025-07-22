@@ -113,12 +113,22 @@ function App() {
           {inGame && (
             <>
               <GameCanvas
-                // props for character, bubbles, etc. in future
+                // In the future: pass down level, score/lives onScore/onLifeLost handlers as needed
               />
               <Controls
-                onLeft={() => {}}
-                onRight={() => {}}
-                onShoot={() => {}}
+                onLeft={() => {
+                  // Forward mobile/onscreen button to GameCanvas movement.
+                  const event = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
+                  window.dispatchEvent(event);
+                }}
+                onRight={() => {
+                  const event = new KeyboardEvent('keydown', { key: 'ArrowRight' });
+                  window.dispatchEvent(event);
+                }}
+                onShoot={() => {
+                  const event = new KeyboardEvent('keydown', { code: 'Space' });
+                  window.dispatchEvent(event);
+                }}
               />
             </>
           )}
