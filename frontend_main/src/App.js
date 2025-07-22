@@ -10,79 +10,112 @@ import LevelIndicator from './components/LevelIndicator';
 import InstructionsModal from './components/InstructionsModal';
 import Controls from './components/Controls';
 import GameOverMenu from './components/GameOverMenu';
+import LevelCompleteMenu from './components/LevelCompleteMenu';
 
 // PUBLIC_INTERFACE
 function App() {
   // Game's main UI states
   const [theme, setTheme] = useState('light');
+  // Menu and modal states
   const [showMenu, setShowMenu] = useState(true);
   const [showInstructions, setShowInstructions] = useState(false);
+
+  // Game progression and state machine
   const [inGame, setInGame] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
   const [levelCleared, setLevelCleared] = useState(false);
-
-  // Placeholder state for demo
-  const [score, setScore] = useState(0);
-  const [lives, setLives] = useState(3);
   const [level, setLevel] = useState(1);
 
-  // Effect to apply theme to document element
+  // Player stats
+  const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(3);
+
+  // Theme effect
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   // PUBLIC_INTERFACE
   const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  // Menu/event handlers
+  // Start game from menu (fresh state)
   const handleStartGame = () => {
     setShowMenu(false);
+    setShowInstructions(false);
     setIsGameOver(false);
     setLevelCleared(false);
     setInGame(true);
-    // reset score/lives if restarting; logic to be implemented
     setScore(0);
     setLives(3);
     setLevel(1);
   };
 
-  const handleShowInstructions = () => setShowInstructions(true);
-
-  const handleExit = () => {
-    // Web: Could reload or hide UI, here just show menu again
-    setShowMenu(true);
-    setIsGameOver(false);
-    setInGame(false);
+  // Called when pressed Next Level button (after clearing a level)
+  const handleNextLevel = () => {
     setLevelCleared(false);
+    setIsGameOver(false);
+    setShowMenu(false);
+    setInGame(true);
+    setLives(3); // Or: optionally keep lives between levels? Classic mode resets
+    setLevel((prevLvl) => prevLvl + 1);
+    // Do not reset score; keep score accumulating over all levels
+  };
+
+  // Enter instructions modal
+  const handleShowInstructions = () => {
+    setShowInstructions(true);
+  };
+
+  // Exit to main menu - resets main state
+  const handleExit = () => {
+    setShowMenu(true);
+    setShowInstructions(false);
+    setIsGameOver(false);
+    setLevelCleared(false);
+    setInGame(false);
+    setScore(0);
+    setLives(3);
+    setLevel(1);
   };
 
   const handleCloseInstructions = () => setShowInstructions(false);
 
+  // Called by GameCanvas when all bubbles are cleared
   const handleLevelComplete = () => {
     setLevelCleared(true);
     setInGame(false);
-    setLevel(lvl => lvl + 1);
   };
 
+  // Called by GameCanvas when player loses all lives
   const handleGameOver = () => {
     setIsGameOver(true);
     setInGame(false);
   };
 
+  // Retry current level after game over
   const handleRetry = () => {
     setIsGameOver(false);
     setLevelCleared(false);
     setInGame(true);
-    setScore(0); // Or resume
+    setScore(0);
     setLives(3);
+    setLevel(1);
   };
 
   /* Main UI Rendering */
   return (
     <div className="App">
-      <header className="App-header" style={{minHeight:'unset', background:'transparent', alignItems:'unset', justifyContent:'unset'}}>
+      <header
+        className="App-header"
+        style={{
+          minHeight: 'unset',
+          background: 'transparent',
+          alignItems: 'unset',
+          justifyContent: 'unset',
+        }}
+      >
         <button
           className="theme-toggle"
           onClick={toggleTheme}
@@ -93,9 +126,15 @@ function App() {
         {/* UI Overlays (Score/Lives/Level) */}
         {inGame && (
           <div className="ui-top-overlay">
-            <div className="ui-topbar-left"><ScoreBar score={score} /></div>
-            <div className="ui-topbar-center"><LivesIndicator lives={lives} /></div>
-            <div className="ui-topbar-right"><LevelIndicator level={level} /></div>
+            <div className="ui-topbar-left">
+              <ScoreBar score={score} />
+            </div>
+            <div className="ui-topbar-center">
+              <LivesIndicator lives={lives} />
+            </div>
+            <div className="ui-topbar-right">
+              <LevelIndicator level={level} />
+            </div>
           </div>
         )}
         {/* MainContent Area */}
@@ -110,6 +149,7 @@ function App() {
           {showInstructions && (
             <InstructionsModal onClose={handleCloseInstructions} />
           )}
+          {/* Main Game in progress */}
           {inGame && (
             <>
               <GameCanvas
@@ -118,9 +158,9 @@ function App() {
                 onScore={(pts) => setScore((s) => s + pts)}
                 onLifeLost={() => {
                   setLives((life) => {
-                    if(life <= 1) {
-                      setTimeout(() => setIsGameOver(true), 350); // Show slight animation delay
-                      setInGame(false);
+                    // If losing last life, trigger game over
+                    if (life <= 1) {
+                      setTimeout(() => handleGameOver(), 350); // Slight delay
                       return 0;
                     }
                     return life - 1;
@@ -145,11 +185,21 @@ function App() {
               />
             </>
           )}
-          {(isGameOver || levelCleared) && (
+
+          {/* Level Cleared menu */}
+          {levelCleared && !isGameOver && (
+            <LevelCompleteMenu
+              level={level}
+              onNext={handleNextLevel}
+              onMainMenu={handleExit}
+            />
+          )}
+          {/* Game Over menu */}
+          {isGameOver && !levelCleared && (
             <GameOverMenu
-              gameOver={isGameOver}
-              isWin={levelCleared}
-              onRetry={levelCleared ? handleStartGame : handleRetry}
+              gameOver={true}
+              isWin={false}
+              onRetry={handleRetry}
               onMainMenu={handleExit}
             />
           )}

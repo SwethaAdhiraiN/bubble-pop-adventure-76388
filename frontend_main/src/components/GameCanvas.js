@@ -31,29 +31,36 @@ const BUBBLE_BOUNCE_VY = -11;
  * Returns initial level setup for bubbles.
  */
 function getInitialBubbles(level = 1) {
-  // Start with 1-3 large/medium bubbles in random positions
-  const basic = [
-    {
-      id: 1,
-      x: CANVAS_WIDTH * 0.3,
-      y: 70,
-      vx: 2 + level * 0.35,
+  // Increase bubbles and difficulty each level.
+  // Up to 3 base bubbles, spawn more at higher levels, increase speed and size distribution.
+  const bubbles = [];
+  const numBase = Math.min(2 + Math.floor(level/2), 5);
+  for (let i = 0; i < numBase; ++i) {
+    // Bubble size: more variety as levels increase
+    const sizeIdx =
+      i < 2
+        ? 0
+        : Math.random() < 0.33 + level * 0.07
+        ? 1
+        : 0;
+    // Speed up a bit per level
+    let baseVx = 2.0 + 0.33 * (level + i);
+    if (level > 2)
+      baseVx += Math.random() * (0.19 + 0.081 * level);
+    bubbles.push({
+      id: Date.now() + Math.random() + "_" + i,
+      x:
+        (CANVAS_WIDTH / (numBase + 1)) *
+          (1 + i) +
+        ((Math.random() - 0.5) * 45 * (sizeIdx + 1)),
+      y: 65 + Math.random() * 45,
+      vx: (i % 2 === 0 ? 1 : -1) * baseVx,
       vy: 0,
-      size: 0, // index into BUBBLE_SIZES (0 = large)
+      size: sizeIdx,
       alive: true,
-    },
-    {
-      id: 2,
-      x: CANVAS_WIDTH * 0.7,
-      y: 90,
-      vx: -2.7 - level * 0.35,
-      vy: 0,
-      size: 0,
-      alive: true,
-    },
-  ];
-  // Optionally randomize or add difficulty as levels increase
-  return basic;
+    });
+  }
+  return bubbles;
 }
 
 /**
