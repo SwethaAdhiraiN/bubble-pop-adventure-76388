@@ -96,7 +96,9 @@ function GameCanvas({
    * - Bubble popping/splitting and scoring
    * - Hooks for parent score/life/level
    */
-  const [characterX, setCharacterX] = useState(CANVAS_WIDTH / 2 - CHARACTER_WIDTH / 2);
+  // Character now starts at the very left edge (with a small padding for the sprite not to be partially out of bounds)
+  const CHARACTER_START_X = 18; // 18px padding from the left, adjust if needed
+  const [characterX, setCharacterX] = useState(CHARACTER_START_X);
   const [characterDir, setCharacterDir] = useState(0);
   const [harpoon, setHarpoon] = useState(null); // {x, y, active}
   const [harpoonCooldown, setHarpoonCooldown] = useState(false);
@@ -115,7 +117,7 @@ function GameCanvas({
     setBubbles(getInitialBubbles(level));
     setHarpoon(null);
     setScorePending(null);
-    setCharacterX(CANVAS_WIDTH / 2 - CHARACTER_WIDTH / 2);
+    setCharacterX(CHARACTER_START_X);
     setCharHit(false);
     setPowerup(null);
     if (powerupTimeout.current) {
