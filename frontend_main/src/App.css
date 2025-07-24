@@ -336,6 +336,29 @@
   font-size: 1.08em;
 }
 
+/* --- Shield Powerup --- */
+@keyframes powerup-appear {
+  0% { opacity: 0; transform: scale(0.7); filter: blur(3px);}
+  70% {opacity: 1;}
+  100% {opacity: 1; transform: scale(1); filter: none;}
+}
+.powerup-shield {
+  animation: powerup-appear 0.36s cubic-bezier(.38,-0.02,.68,1.1);
+  will-change: opacity, transform, filter;
+  pointer-events: none;
+}
+
+/* --- UI Shield Indicator --- */
+.shield-indicator {
+  margin-left: 14px;
+}
+.shield-indicator.shield-inactive {
+  background: rgba(110, 110, 110, 0.085) !important;
+  color: #9a9a9a !important;
+  border-color: #bbb !important;
+  opacity: 0.56 !important;
+}
+
 /* Main Menu */
 .main-menu {
   margin: 0 auto;

@@ -7,6 +7,7 @@ import GameCanvas from './components/GameCanvas';
 import ScoreBar from './components/ScoreBar';
 import LivesIndicator from './components/LivesIndicator';
 import LevelIndicator from './components/LevelIndicator';
+import ShieldIndicator from './components/ShieldIndicator';
 import InstructionsModal from './components/InstructionsModal';
 import Controls from './components/Controls';
 import GameOverMenu from './components/GameOverMenu';
@@ -29,6 +30,8 @@ function App() {
   // Player stats
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
+  // Powerup state (shield ability)
+  const [hasShield, setHasShield] = useState(false);
 
   // Theme effect
   useEffect(() => {
@@ -50,6 +53,7 @@ function App() {
     setScore(0);
     setLives(3);
     setLevel(1);
+    setHasShield(false);
   };
 
   // Called when pressed Next Level button (after clearing a level)
@@ -60,6 +64,7 @@ function App() {
     setInGame(true);
     setLives(3); // Or: optionally keep lives between levels? Classic mode resets
     setLevel((prevLvl) => prevLvl + 1);
+    setHasShield(false);
     // Do not reset score; keep score accumulating over all levels
   };
 
@@ -78,6 +83,7 @@ function App() {
     setScore(0);
     setLives(3);
     setLevel(1);
+    setHasShield(false);
   };
 
   const handleCloseInstructions = () => setShowInstructions(false);
@@ -102,6 +108,7 @@ function App() {
     setScore(0);
     setLives(3);
     setLevel(1);
+    setHasShield(false);
   };
 
   /* Main UI Rendering */
@@ -129,8 +136,9 @@ function App() {
             <div className="ui-topbar-left">
               <ScoreBar score={score} />
             </div>
-            <div className="ui-topbar-center">
+            <div className="ui-topbar-center" style={{ display: 'flex', gap: 16, alignItems: 'center', flexDirection: 'row' }}>
               <LivesIndicator lives={lives} />
+              <ShieldIndicator active={hasShield} />
             </div>
             <div className="ui-topbar-right">
               <LevelIndicator level={level} />
@@ -153,12 +161,16 @@ function App() {
           {inGame && (
             <>
               <GameCanvas
-                // Pass hooks for score, lives, and level events
+                // Pass hooks for score, lives, and level events, plus shield powerup logic
                 level={level}
                 onScore={(pts) => setScore((s) => s + pts)}
                 onLifeLost={() => {
                   setLives((life) => {
                     // If losing last life, trigger game over
+                    if (hasShield) {
+                      // Should not occur here, handled in shield logic
+                      return life;
+                    }
                     if (life <= 1) {
                       setTimeout(() => handleGameOver(), 350); // Slight delay
                       return 0;
@@ -167,6 +179,10 @@ function App() {
                   });
                 }}
                 onAllBubblesCleared={handleLevelComplete}
+                // Shield powerup logic
+                onGrantShield={() => setHasShield(true)}
+                shieldActive={hasShield}
+                onShieldUsed={() => setHasShield(false)}
               />
               {/* 
                   Controls: forwarded to simulate keyboard for game logic.

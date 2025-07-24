@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import Character from './Character';
 import Harpoon from './Harpoon';
+import Powerup from './Powerup';
 import Bubbles from './Bubbles';
 
 /**
@@ -71,11 +72,20 @@ function clamp(value, min, max) {
 }
 
 // PUBLIC_INTERFACE
+/**
+ * GameCanvas now supports shield powerup logic. Receives new props:
+ *   - onGrantShield: function to activate shield ability
+ *   - shieldActive: boolean, whether shield is on
+ *   - onShieldUsed: callback fired when shield absorbs hit
+ */
 function GameCanvas({
   onScore,
   onLifeLost,
   onAllBubblesCleared,
   level = 1,
+  onGrantShield,
+  shieldActive,
+  onShieldUsed,
 }) {
   /**
    * Renders and runs main game logic, including:
@@ -96,14 +106,51 @@ function GameCanvas({
   const [audioPopKey, setAudioPopKey] = useState(0);
   const [charHit, setCharHit] = useState(false); // For character "death" animation
 
-  // Reset bubbles and character state on new level
+  // Powerup logic
+  const [powerup, setPowerup] = useState(null); // {x, y, visible: bool, id: stamp}
+  const powerupTimeout = useRef(null);
+
+  // Reset bubbles/character/powerup state on new level
   useEffect(() => {
     setBubbles(getInitialBubbles(level));
     setHarpoon(null);
     setScorePending(null);
     setCharacterX(CANVAS_WIDTH / 2 - CHARACTER_WIDTH / 2);
     setCharHit(false);
+    setPowerup(null);
+    if (powerupTimeout.current) {
+      clearTimeout(powerupTimeout.current);
+      powerupTimeout.current = null;
+    }
+    // Schedule next random powerup
+    spawnPowerupRandom();
+    // eslint-disable-next-line
   }, [level]);
+
+  // Schedule the next powerup to appear after a random delay (3-10 sec); will respawn after collect/use quickly
+  const spawnPowerupRandom = useCallback(() => {
+    if (powerupTimeout.current) clearTimeout(powerupTimeout.current);
+    const delay = 3000 + Math.random() * 7000; // Between 3s and 10s
+    powerupTimeout.current = setTimeout(() => {
+      setPowerup({
+        visible: true,
+        id: Date.now(),
+        // Appear randomly around the center area, but not exactly same location each time
+        x: CANVAS_WIDTH / 2 + Math.floor((Math.random() - 0.5) * 22),
+        y: CANVAS_HEIGHT / 2 + Math.floor((Math.random() - 0.5) * 40),
+      });
+    }, delay);
+  }, []);
+
+  // After collection/use, remove and schedule next after a short delay.
+  const removeAndReschedulePowerup = useCallback(() => {
+    setPowerup(null);
+    if (powerupTimeout.current) clearTimeout(powerupTimeout.current);
+    // Next appear after 6-12s if not at end of level
+    powerupTimeout.current = setTimeout(() => {
+      spawnPowerupRandom();
+    }, 6000 + Math.random() * 6000);
+  }, [spawnPowerupRandom]);
 
   // For efficient game loop (stores mutable, non-reactive refs)
   const requestRef = useRef();
@@ -210,6 +257,20 @@ function GameCanvas({
         })
       );
 
+      // --- Powerup Collect Logic: Character collision with powerup
+      if (powerup && powerup.visible) {
+        // Check AABB circle with center (characterX + w/2, GROUND_Y - CHARACTER_HEIGHT/2)
+        // radius: 26
+        const px = powerup.x, py = powerup.y, pr = 22;
+        const cx = characterX + CHARACTER_WIDTH / 2, cy = GROUND_Y - CHARACTER_HEIGHT / 2;
+        const distPower = Math.hypot(px - cx, py - cy);
+        if (distPower < pr + Math.max(CHARACTER_WIDTH, CHARACTER_HEIGHT) / 2.1) {
+          // Collect and grant shield
+          if (typeof onGrantShield === 'function') onGrantShield();
+          removeAndReschedulePowerup();
+        }
+      }
+
       // --- Collision Detection: Harpoon <-> Bubble ---
       if (harpoon && harpoon.active) {
         let harpoonUsed = false;
@@ -276,9 +337,10 @@ function GameCanvas({
         });
       }
 
-      // --- Player <-> Bubble collision
+      // --- Player <-> Bubble collision (with shield logic)
       let playerLose = false;
-      bubbles.forEach((b) => {
+      let bubbleHitIdx = -1;
+      bubbles.forEach((b, i) => {
         if (!b.alive) return;
         const bx = b.x,
           by = b.y,
@@ -288,13 +350,30 @@ function GameCanvas({
         const dist = Math.hypot(bx - cx, by - cy);
         if (dist < br + Math.max(CHARACTER_WIDTH, CHARACTER_HEIGHT) / 2.1 && !playerLose) {
           playerLose = true;
+          bubbleHitIdx = i;
         }
       });
 
       if (playerLose) {
-        setCharHit(true); // visual effect for character hit
-        setTimeout(() => setCharHit(false), 590);
-        if (typeof onLifeLost === "function") onLifeLost();
+        if (shieldActive) {
+          // Absorb hit, remove bubble, clear shield, FX
+          setCharHit(true); // visual effect for character hit
+          setTimeout(() => setCharHit(false), 590);
+          if (bubbleHitIdx >= 0) {
+            setBubbles((prev) => {
+              const next = [...prev];
+              if (next[bubbleHitIdx]) next[bubbleHitIdx].alive = false;
+              return next;
+            });
+          }
+          if (typeof onShieldUsed === "function") onShieldUsed();
+          removeAndReschedulePowerup();
+        } else {
+          // Standard lose logic
+          setCharHit(true); // visual effect for character hit
+          setTimeout(() => setCharHit(false), 590);
+          if (typeof onLifeLost === "function") onLifeLost();
+        }
       }
 
       // --- Level Clear: trigger win if no bubbles alive
@@ -308,9 +387,26 @@ function GameCanvas({
     }
 
     requestRef.current = requestAnimationFrame(gameLoop);
-    return () => cancelAnimationFrame(requestRef.current);
+    return () => {
+      cancelAnimationFrame(requestRef.current);
+      if (powerupTimeout.current) clearTimeout(powerupTimeout.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [characterX, harpoon, harpoonCooldown, bubbles, onScore, onLifeLost, onAllBubblesCleared, level]);
+  }, [
+    characterX,
+    harpoon,
+    harpoonCooldown,
+    bubbles,
+    onScore,
+    onLifeLost,
+    onAllBubblesCleared,
+    level,
+    shieldActive,
+    onGrantShield,
+    onShieldUsed,
+    removeAndReschedulePowerup,
+    powerup
+  ]);
 
   // Score visual pop/fade
   useEffect(() => {
@@ -344,6 +440,11 @@ function GameCanvas({
     >
       {/* Game Background */}
       <div className="game-bg-arcade" />
+
+      {/* Powerup visual */}
+      {powerup && powerup.visible && (
+        <Powerup x={powerup.x} y={powerup.y} visible={powerup.visible} />
+      )}
 
       {/* Render Bubbles */}
       {bubbles.map(
